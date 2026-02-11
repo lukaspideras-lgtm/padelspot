@@ -2,7 +2,7 @@ name: Deploy auth-callback to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     paths:
       - 'auth-callback-deploy/**'
       - '.github/workflows/deploy-auth-callback.yml'
