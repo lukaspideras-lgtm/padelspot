@@ -30,27 +30,22 @@ supabase/sql/migration_auth_pending_by_email.sql
 
 ### 2. Supabase vrednosti u auth-callback
 
-**Ako vidiš „Server nije pravilno podešen“**, ubaci vrednosti iz `.env`:
+Vrednosti su već u `auth-callback-deploy/auth-callback.html`. Ako menjaš Supabase projekat:
 
 ```bash
 npm run inject:auth-callback
-```
-
-Ova komanda prepisuje placeholders u `auth-callback-deploy/auth-callback.html` vrednostima iz `.env` (EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY). Zatim:
-
-```bash
 git add auth-callback-deploy/auth-callback.html
-git commit -m "Inject Supabase config u auth-callback"
+git commit -m "Update Supabase config"
 git push
 ```
-
-**Alternativa – GitHub Secrets** (ako koristiš GitHub Pages):
-- Settings → Secrets → dodaj `SUPABASE_URL` i `SUPABASE_ANON_KEY`
-- Posle push-a workflow ubacuje vrednosti
 
 ### 3. Deploy auth-callback
 
 Push na `auth-callback-deploy/` – GitHub Actions automatski deployuje.
+
+**Ako vidiš „Server nije pravilno podešen“:**
+1. GitHub → **Actions** → **Deploy auth-callback to GitHub Pages** → **Run workflow** (ručno pokreni)
+2. Očisti keš u browseru (Ctrl+Shift+Delete) ili otvori link u **incognito/private** prozoru
 
 ### 4. EAS Update / novi build
 
@@ -67,3 +62,11 @@ eas update --branch production --platform android
 5. Vrati se u app – u roku par sekundi bićeš ulogovan i preusmeren na Rezervacije
 
 **Ako i dalje bude spinning loop:** Proveri da li Supabase Redirect URLs sadrži `https://padelpotvrda.com/auth-callback.html`.
+
+## Troubleshooting
+
+| Problem | Rešenje |
+|---------|---------|
+| „Server nije pravilno podešen“ | 1. Ručno pokreni workflow (Actions → Run workflow) 2. Probaj incognito/private prozor 3. Proveri da li GitHub Pages koristi „Deploy from GitHub Actions“ (Settings → Pages) |
+| „Link je istekao“ | Linkovi ističu za ~1h. Klikni „Pošalji ponovo“ na verify-email ekranu. |
+| „Greška pri čuvanju“ | Proveri da li je `migration_auth_pending_by_email.sql` pokrenut u Supabase. |
