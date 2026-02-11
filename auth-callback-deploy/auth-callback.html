@@ -7,14 +7,22 @@
   <style>
     body { font-family: sans-serif; text-align: center; padding: 2rem; background: #f5f5f5; }
     .msg { color: #333; margin: 1rem 0; }
-    .link { color: #8dbc3f; font-weight: bold; }
+    .err { color: #c00; }
+    .btn { display: inline-block; margin-top: 1.5rem; padding: 14px 28px; background: #8dbc3f; color: #fff; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; text-decoration: none; }
+    .btn:hover { background: #7aab30; }
   </style>
 </head>
 <body>
   <p class="msg">Potvrđujemo nalog...</p>
   <p class="msg">Otvori aplikaciju Padel Spot.</p>
+  <div id="manual" style="display:none;">
+    <p class="msg">Aplikacija se nije otvorila automatski?</p>
+    <a id="openBtn" href="#" class="btn">Otvori Padel Spot</a>
+  </div>
   <script>
     (function() {
+      var SUPABASE_URL = 'AUTH_CB_SUPABASE_URL';
+      var SUPABASE_ANON = 'AUTH_CB_SUPABASE_ANON';
       var hash = window.location.hash.slice(1);
       if (!hash) {
         document.body.innerHTML = '<p class="msg">Neispravan link. Zatražite novi email.</p>';
@@ -26,8 +34,63 @@
         if (kv[0] && kv[1]) params[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1]);
       });
       var access = params.access_token, refresh = params.refresh_token;
-      if (access && refresh) {
-        window.location.replace('padelspot://auth/callback?access_token=' + encodeURIComponent(access) + '&refresh_token=' + encodeURIComponent(refresh));
+      var openUrl = null;
+
+      function doRedirect(url) {
+        openUrl = url;
+        window.location.href = url;
+      }
+
+      function showManual() {
+        document.getElementById('manual').style.display = 'block';
+        var btn = document.getElementById('openBtn');
+        if (openUrl) {
+          btn.href = openUrl;
+          btn.onclick = function(e) { e.preventDefault(); window.location.href = openUrl; };
+        }
+      }
+
+      function getEmailFromToken(token) {
+        try {
+          var parts = token.split('.');
+          if (parts.length !== 3) return null;
+          var payload = parts[1].replace(/-/g,'+').replace(/_/g,'/');
+          var json = atob(payload);
+          var data = JSON.parse(json);
+          return data.email || null;
+        } catch(e) { return null; }
+      }
+
+      if (access && refresh && SUPABASE_URL && SUPABASE_ANON && SUPABASE_URL.indexOf('http') === 0) {
+        var email = getEmailFromToken(access);
+        if (email) {
+          fetch(SUPABASE_URL + '/rest/v1/rpc/store_pending_session', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_ANON,
+              'Authorization': 'Bearer ' + SUPABASE_ANON
+            },
+            body: JSON.stringify({ p_email: email, p_access_token: access, p_refresh_token: refresh })
+          })
+          .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+          .then(function() {
+            document.body.innerHTML = '<p class="msg">Nalog je potvrđen!</p><p class="msg">Vratite se u aplikaciju Padel Spot – ona će vas automatski ulogovati.</p>';
+          })
+          .catch(function() {
+            openUrl = 'padelspot://auth/callback?access_token=' + encodeURIComponent(access) + '&refresh_token=' + encodeURIComponent(refresh);
+            doRedirect(openUrl);
+            setTimeout(showManual, 2500);
+          });
+        } else {
+          openUrl = 'padelspot://auth/callback?access_token=' + encodeURIComponent(access) + '&refresh_token=' + encodeURIComponent(refresh);
+          doRedirect(openUrl);
+          setTimeout(showManual, 2500);
+        }
+      } else if (access && refresh) {
+        openUrl = 'padelspot://auth/callback?access_token=' + encodeURIComponent(access) + '&refresh_token=' + encodeURIComponent(refresh);
+        doRedirect(openUrl);
+        setTimeout(showManual, 2500);
       } else if (params.error) {
         document.body.innerHTML = '<p class="msg">Link je istekao. Zatražite novi.</p>';
       } else {
