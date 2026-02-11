@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>Potvrđujemo nalog – Padel Spot</title>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 2rem; background: #f5f5f5; }
@@ -89,8 +90,10 @@
       .then(function() {
         document.body.innerHTML = '<p class="msg">Nalog je potvrđen!</p><p class="msg">Vratite se u aplikaciju Padel Spot – ona će vas automatski ulogovati u roku par sekundi.</p>';
       })
-      .catch(function() {
-        show('Greška pri čuvanju. Zatražite novi link (Pošalji ponovo).', true);
+      .catch(function(err) {
+        var msg = 'Greška pri čuvanju. Zatražite novi link (Pošalji ponovo).';
+        if (err && err.message) msg += ' (' + err.message + ')';
+        show(msg, true);
       });
     })();
   </script>
