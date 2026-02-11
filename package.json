@@ -7,7 +7,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "deploy:auth-callback": "vercel --prod --cwd auth-callback-deploy"
+    "deploy:auth-callback": "node scripts/inject-auth-callback.js && vercel --prod --cwd auth-callback-deploy",
+    "inject:auth-callback": "node scripts/inject-auth-callback.js",
+    "update:android": "eas update --branch preview --platform android"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -18,6 +20,7 @@
     "@tanstack/react-query": "^5.90.20",
     "date-fns": "^4.1.0",
     "expo": "~54.0.33",
+    "expo-build-properties": "~1.0.10",
     "expo-calendar": "~15.0.8",
     "expo-constants": "~18.0.13",
     "expo-font": "~14.0.11",

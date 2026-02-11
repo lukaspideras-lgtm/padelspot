@@ -28,16 +28,25 @@ U Supabase SQL Editor pokreni:
 supabase/sql/migration_auth_pending_by_email.sql
 ```
 
-### 2. GitHub Secrets (za deploy)
+### 2. Supabase vrednosti u auth-callback
 
-Ako koristiš GitHub Pages za auth-callback:
+**Ako vidiš „Server nije pravilno podešen“**, ubaci vrednosti iz `.env`:
 
-1. **Settings** → **Secrets and variables** → **Actions**
-2. Dodaj:
-   - `SUPABASE_URL` – tvoj Supabase projekat URL (npr. `https://xxx.supabase.co`)
-   - `SUPABASE_ANON_KEY` – anon key iz Supabase Dashboard → Settings → API
+```bash
+npm run inject:auth-callback
+```
 
-3. Bez ovih secrets, auth-callback prikazuje grešku „Server nije pravilno podešen“.
+Ova komanda prepisuje placeholders u `auth-callback-deploy/auth-callback.html` vrednostima iz `.env` (EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY). Zatim:
+
+```bash
+git add auth-callback-deploy/auth-callback.html
+git commit -m "Inject Supabase config u auth-callback"
+git push
+```
+
+**Alternativa – GitHub Secrets** (ako koristiš GitHub Pages):
+- Settings → Secrets → dodaj `SUPABASE_URL` i `SUPABASE_ANON_KEY`
+- Posle push-a workflow ubacuje vrednosti
 
 ### 3. Deploy auth-callback
 
