@@ -1,72 +1,121 @@
 // =============================================================================
-// Auth service – Supabase Auth + profiles (email verifikacija preko Resend)
+// Auth service – Supabase Auth (OTP + password)
 // =============================================================================
 
 import { supabase } from '@/src/lib/supabase';
-
 import type { User } from '@/types';
-
-const AUTH_CALLBACK_URL =
-  process.env.EXPO_PUBLIC_AUTH_CALLBACK_URL ?? 'https://padelpotvrda.com/auth-callback.html';
 
 export interface AuthResult {
   success: boolean;
   error?: string;
-  /** Kad je true, korisnik mora da potvrdi email – prikaži verify-email ekran */
   needsVerification?: boolean;
   email?: string;
 }
 
-export async function register(
-  email: string,
-  password: string,
-  firstName: string,
-  lastName: string,
-  phone: string
-): Promise<AuthResult> {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { first_name: firstName, last_name: lastName, phone },
-      emailRedirectTo: AUTH_CALLBACK_URL,
-    },
-  });
-
-  if (error) {
-    const msg = error.message.toLowerCase();
-    if (msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
-      return { success: false, error: 'Ovaj email je već registrovan. Prijavite se.' };
-    }
-    return { success: false, error: error.message };
+function parseSupabaseError(err: unknown): string {
+  if (err && typeof err === 'object' && 'message' in err) {
+    const msg = (err as { message?: string }).message ?? '';
+    if (msg.includes('phone_taken')) return 'Ovaj broj telefona je već u upotrebi.';
+    if (msg.includes('Invalid login')) return 'Pogrešan email ili lozinka.';
+    if (msg.includes('Email not confirmed')) return 'Potvrdite email putem poslatog koda.';
+    return msg;
   }
-  if (data?.user && !data.session) {
-    return { success: false, needsVerification: true, email };
-  }
-  return { success: true };
+  return 'Greška pri autentifikaciji.';
 }
 
-export async function resendVerificationEmail(email: string): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-    email,
-    options: { emailRedirectTo: AUTH_CALLBACK_URL },
-  });
-  if (error) return { success: false, error: error.message };
-  return { success: true };
+export async function register(
+  email: string,
+  firstName: string,
+  lastName: string,
+  phone: string,
+  password: string
+): Promise<AuthResult> {
+  try {
+    const { data: phoneOk, error: phoneErr } = await supabase.rpc('check_phone_available', {
+      p_phone: phone,
+    });
+    if (phoneErr) return { success: false, error: parseSupabaseError(phoneErr) };
+    if (phoneOk === false) return { success: false, error: 'Ovaj broj telefona je već u upotrebi.' };
+
+    const { error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          phone: phone.trim(),
+        },
+      },
+    });
+    if (error) return { success: false, error: parseSupabaseError(error) };
+    // signUp success – session may be null if email confirmation required
+    return { success: true, needsVerification: true, email: email.trim() };
+  } catch (e) {
+    return { success: false, error: parseSupabaseError(e) };
+  }
+}
+
+export async function sendOtp(email: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
+    if (error) return { success: false, error: parseSupabaseError(error) };
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: parseSupabaseError(e) };
+  }
+}
+
+/** Resend signup confirmation OTP (after register with password) */
+export async function resendSignupOtp(email: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+    });
+    if (error) return { success: false, error: parseSupabaseError(error) };
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: parseSupabaseError(e) };
+  }
+}
+
+export async function verifyOtp(
+  email: string,
+  token: string,
+  options?: { type?: 'email' | 'signup' }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const type = options?.type ?? 'email';
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: token.trim(),
+      type,
+    });
+    if (error) return { success: false, error: parseSupabaseError(error) };
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: parseSupabaseError(e) };
+  }
 }
 
 export async function login(email: string, password: string): Promise<AuthResult> {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    return { success: false, error: error.message };
+  try {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) return { success: false, error: parseSupabaseError(error) };
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: parseSupabaseError(e) };
   }
-  return { success: true };
 }
 
 export async function logout(): Promise<void> {
-  await supabase.auth.signOut();
+  // Use local scope to reliably clear session on device (no network required).
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
+  if (error) throw new Error(error.message);
 }
 
 export async function getSession() {
@@ -74,23 +123,50 @@ export async function getSession() {
   return data.session;
 }
 
-export async function getCurrentUser(): Promise<User | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user?.email) return null;
-
-  const { data: profile } = await supabase
+export async function setProfileHasSeenTutorial(): Promise<void> {
+  const { data: { user }, error: userErr } = await supabase.auth.getUser();
+  if (userErr) throw new Error(userErr.message);
+  if (!user) {
+    throw new Error('no_user');
+  }
+  const { data: updatedRows, error } = await supabase
     .from('profiles')
-    .select('first_name, last_name, phone, role')
+    .update({ has_seen_tutorial: true })
     .eq('id', user.id)
-    .single();
+    .select('id');
+  if (error) {
+    throw new Error(error.message);
+  }
 
-  const p = profile as { first_name?: string; last_name?: string; phone?: string; role?: string } | null;
-  const role = (p?.role ?? 'user') as User['role'];
+  // If no row was updated, the profile row may not exist yet. Upsert minimal row for this user.
+  if (!updatedRows || updatedRows.length === 0) {
+    const { error: upsertErr } = await supabase
+      .from('profiles')
+      .upsert({ id: user.id, has_seen_tutorial: true }, { onConflict: 'id' });
+    if (upsertErr) {
+      throw new Error(upsertErr.message);
+    }
+  }
+}
+
+export async function getCurrentUser(): Promise<User | null> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) return null;
+
+  const { data: profile, error: profileErr } = await supabase
+    .from('profiles')
+    .select('first_name, last_name, phone, role, has_seen_tutorial')
+    .eq('id', authUser.id)
+    .single();
+  // ignore profileErr; fall back to metadata/defaults
+
+  const meta = authUser.user_metadata ?? {};
   return {
-    email: user.email,
-    ime: p?.first_name ?? '',
-    prezime: p?.last_name ?? '',
-    telefon: p?.phone ?? '',
-    role,
+    email: authUser.email ?? '',
+    ime: profile?.first_name ?? meta.first_name ?? '',
+    prezime: profile?.last_name ?? meta.last_name ?? '',
+    telefon: profile?.phone ?? meta.phone ?? '',
+    role: (profile?.role as 'user' | 'admin') ?? 'user',
+    hasSeenTutorial: profile?.has_seen_tutorial ?? false,
   };
 }

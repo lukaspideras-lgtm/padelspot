@@ -1,12 +1,11 @@
 import { useEffect } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { useAppStore } from '@/store/useAppStore';
-import { supabase } from '@/src/lib/supabase';
 
 const ADMIN_ROUTE = 'admin';
 
 export function AuthGuard() {
-  const { isHydrated, currentUser } = useAppStore();
+  const { isHydrated, currentUser, pendingVerificationEmail } = useAppStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -24,14 +23,20 @@ export function AuthGuard() {
 
     if (onIndex) return;
 
+    // Pending verification: allow verify-email even when session is null
     if (onVerifyEmail && !isLoggedIn) return;
     if (onVerifyEmail && isLoggedIn) {
       router.replace('/(tabs)/reserve');
       return;
     }
 
+    // If not logged in and not in auth: redirect to login, unless we have pending verify – then go to verify
     if (!isLoggedIn && !inAuth) {
-      router.replace('/auth/login');
+      if (pendingVerificationEmail) {
+        router.replace({ pathname: '/auth/verify-email', params: { email: pendingVerificationEmail, fromSignup: 'true' } });
+      } else {
+        router.replace('/auth/login');
+      }
       return;
     }
 
@@ -40,24 +45,10 @@ export function AuthGuard() {
       return;
     }
 
-    // Backup: na auth/callback polling – kad setSession završi, redirect odmah
-    const onCallback = segments[1] === 'callback';
-    if (inAuth && onCallback && !isLoggedIn) {
-      const iv = setInterval(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          if (session) {
-            clearInterval(iv);
-            router.replace('/');
-          }
-        });
-      }, 100);
-      return () => clearInterval(iv);
-    }
-
     if (inAdmin && isLoggedIn && !isAdmin) {
       router.replace('/admin-forbidden');
     }
-  }, [isHydrated, currentUser, segments]);
+  }, [isHydrated, currentUser, pendingVerificationEmail, segments]);
 
   return null;
 }

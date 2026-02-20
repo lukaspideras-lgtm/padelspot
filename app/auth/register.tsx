@@ -11,6 +11,11 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function isValidPassword(password: string): { ok: boolean; msg?: string } {
+  if (password.length < 6) return { ok: false, msg: 'Lozinka mora imati najmanje 6 karaktera.' };
+  return { ok: true };
+}
+
 const LogoDefault = require('@/assets/images/logo.png');
 const LogoZelen = require('@/assets/images/PADEL-SPOT-LogoZelen.png');
 
@@ -42,31 +47,41 @@ export default function RegisterScreen() {
     if (!lastName.trim()) next.lastName = 'Unesite prezime.';
     if (!phone.trim()) next.phone = 'Unesite broj telefona.';
     else if (!isValidPhone(phone)) next.phone = 'Unesite ispravan broj telefona.';
+    const pwdCheck = isValidPassword(password);
     if (!password) next.password = 'Unesite lozinku.';
-    else if (password.length < 6) next.password = 'Lozinka mora imati najmanje 6 karaktera.';
+    else if (!pwdCheck.ok) next.password = pwdCheck.msg;
     if (password !== confirmPassword) next.confirmPassword = 'Lozinke se ne poklapaju.';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
+  const isFormValid =
+    !!email.trim() &&
+    isValidEmail(email) &&
+    !!firstName.trim() &&
+    !!lastName.trim() &&
+    !!phone.trim() &&
+    isValidPhone(phone) &&
+    isValidPassword(password).ok &&
+    password === confirmPassword;
+
   const handleRegister = async () => {
     if (!validate()) return;
     const result = await register(
       email.trim(),
-      password,
-      confirmPassword,
       firstName.trim(),
       lastName.trim(),
-      phone.trim()
+      phone.trim(),
+      password
     );
-    if (result.success) {
+    if (result.success && result.needsVerification && result.email) {
+      router.push({ pathname: '/auth/verify-email', params: { email: result.email, fromSignup: 'true' } });
+    } else if (result.success) {
       router.replace('/(tabs)/reserve');
-    } else if (result.needsVerification && result.email) {
-      router.push({ pathname: '/auth/verify-email', params: { email: result.email } });
     } else {
       const err = result.error ?? 'Greška pri registraciji.';
       const isPhoneErr = err.includes('telefona');
-      setErrors(isPhoneErr ? { phone: err } : { password: err });
+      setErrors(isPhoneErr ? { phone: err } : { email: err });
     }
   };
 
@@ -123,7 +138,7 @@ export default function RegisterScreen() {
             label="Lozinka"
             value={password}
             onChangeText={setPassword}
-            placeholder="Najmanje 6 karaktera"
+            placeholder="Min. 6 karaktera"
             secureTextEntry
             error={errors.password}
           />
@@ -139,6 +154,7 @@ export default function RegisterScreen() {
             title="Registruj se"
             onPress={handleRegister}
             loading={isLoading}
+            disabled={!isFormValid || isLoading}
             style={styles.button}
             textStyle={{ color: '#fff' }}
           />
@@ -159,7 +175,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1, padding: 24, paddingTop: 60, paddingBottom: 48, alignItems: 'center' },
   form: { width: '100%' },
-  logoWrap: { width: '100%', height: 220, alignItems: 'center', justifyContent: 'center' },
+  logoWrap: { width: '100%', height: 180, alignItems: 'center', justifyContent: 'center' },
   logo: { width: 230, height: 260 },
   title: { fontFamily: 'Oswald-Bold', fontSize: 28, marginBottom: 8, alignSelf: 'stretch' },
   subtitle: { fontFamily: 'Montserrat-Regular', fontSize: 16, marginBottom: 24, alignSelf: 'stretch' },

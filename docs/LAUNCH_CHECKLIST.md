@@ -4,21 +4,10 @@ Pre objavljivanja aplikacije, prođi kroz sledeće stavke.
 
 ---
 
-## 1. Supabase Production
+## 1. Backend
 
-- [ ] **Production projekt** – Kreiraj production Supabase projekat (ne development)
-- [ ] **SQL migracije** – U SQL Editor pokreni redom:
-  1. `sql/init.sql`
-  2. `sql/migration_blocks_and_admin.sql`
-  3. `sql/migration_admin_dashboard.sql`
-- [ ] **Admin korisnik** – Postavi prvog admina:
-  ```sql
-  UPDATE profiles SET role = 'admin'
-  WHERE id = (SELECT id FROM auth.users WHERE email = 'tvoj@email.com');
-  ```
-- [ ] **Courts** – Proveri da su tereni u `courts` tabeli tačni (Zeleni, Plavi, Narandžasti)
-- [ ] **Auth** – Email confirmation: uključi za production (Authentication → Email → Confirm email)
-- [ ] **Auth callback** – hostovan na `https://padelpotvrda.com/auth-callback.html` (vidi `docs/AUTH_CALLBACK_DEPLOY.md`)
+- [ ] Podesi backend od nule (Supabase, Firebase ili custom API)
+- [ ] Konfiguriši `.env` sa URL-om i ključevima
 
 ---
 
